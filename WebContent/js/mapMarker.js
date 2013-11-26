@@ -1,16 +1,28 @@
-//branch function testing
 var map = new BMap.Map("l-map");
 map.enableScrollWheelZoom();
 var point = new BMap.Point(116.404, 39.915);
 map.centerAndZoom(point, 15);
 addContextMenu(map);
 
+//var beijingPosition=new BMap.Point(116.432045,39.910683),
+//hangzhouPosition=new BMap.Point(120.129721,30.314429),
+//taiwanPosition=new BMap.Point(121.491121,25.127053);
+//
+//var curveLine=addCurveLine(map,beijingPosition,hangzhouPosition);
+
+
 function addContextMenu(map){
 	var contextMenu = new BMap.ContextMenu();
 	var txtMenuItem = [ {
 		text : 'add marker',
 		callback : function(p) {
-			addOneMark(map, p);
+			addOneMark(map, p,createOneMarker);
+		}
+	},
+	{
+		text : 'add cluster',
+		callback:function(p){
+			addOneMark(map,p,createOneCluster);
 		}
 	},
 	{
@@ -95,12 +107,19 @@ function addInfoWindow(marker,poi,index){
     return openInfoWinFun;
 }
 
-function addOneMark(map, p) {
-	var marker = new MapMarker(p);
+function createOneMarker(p){
+	return new MapMarker(p);
+}
+
+function createOneCluster(p){
+	return new ClusterMarker(p);
+}
+
+function addOneMark(map, p,init) {
+	var marker = new init(p);
 	marker.enableDragging();
 	marker.addEventListener("click", function() {
-		var sContent = "lat:" + marker.getPosition().lat + " lng:"
-				+ marker.getPosition().lng + " isClick:" + marker.isClick;
+		var sContent = marker.toString();
 
 		var infoWindow = new BMap.InfoWindow(sContent);
 		marker.openInfoWindow(infoWindow);
@@ -115,12 +134,23 @@ function addOneMark(map, p) {
 		}
 		
 		if(clickedMarker!=null){
-			var curveLine=addCurveLine(map,clickedMarker.getPosition(),marker.getPosition());
-			marker.connectedCurveLine.push(curveLine);
-			marker.connectedMarkers.push(clickedMarker);
+			if(clickedMarker instanceof ClusterMarker){
+				clickedMarker.leafMarkers.push(marker);
+				var polyLine=new BMap.Polyline([
+				                           clickedMarker.getPosition(),
+				                           marker.getPosition()],
+				                           {strokeColor:"green", strokeWeight:6, strokeOpacity:0.5});
+				map.addOverlay(polyLine);
+			}else{
+				var curveLine=addCurveLine(map,clickedMarker.getPosition(),marker.getPosition());
+				marker.connectedCurveLine.push(curveLine);
+				marker.connectedMarkers.push(clickedMarker);
+				
+				//clickedMarker.connectedCurveLine.push(curveLine);
+				//clickedMarker.connectedMarkers.push(marker);
+			}
 			
-			//clickedMarker.connectedCurveLine.push(curveLine);
-			//clickedMarker.connectedMarkers.push(marker);
+			
 			clickedMarker.isClick=false;
 		}
 		
@@ -148,6 +178,17 @@ function addContextMenu2Marker(map,marker){
 			alert("please click another marker to add curveline");
 		}
 	} ];
+	if(marker instanceof ClusterMarker){
+		txtMenuItem.push({
+			text:'connect to  cluster',
+			callback:function(target){
+				marker.isClick=true;
+				alert("click another marker to connect");
+			}
+		});
+	}
+	
+	
 	for ( var i = 0; i < txtMenuItem.length; i++) {
 		contextMenu.addItem(new BMap.MenuItem(txtMenuItem[i].text,
 				txtMenuItem[i].callback, 100));
@@ -174,7 +215,7 @@ function addContextMenu2SearchMarker(map,marker){
 }
 
 function changeSelectedSearchResult2MapMarker(map,bmarker){
-	addOneMark(map,bmarker.getPosition());
+	addOneMark(map,bmarker.getPosition(),createOneMarker);
 }
 
 function removeAllSearchResults(map){
@@ -204,6 +245,23 @@ MapMarker.prototype.redrawCurveLine=function(map){
 			redrawOneMarker(map.getOverlays()[i],map);
 		}
 	}
+};
+MapMarker.prototype.toString=function(){
+	return "This is one MapMarker "+"lat:" + this.getPosition().lat + " lng:"
+	+ this.getPosition().lng + " isClick:" + this.isClick;
+	
+};
+
+function ClusterMarker(point){
+	MapMarker.call(this,point);
+	this.leafMarkers=new Array();
+}
+ClusterMarker.prototype=new MapMarker();
+
+ClusterMarker.prototype.toString=function(){
+	return "This is one ClusterMarker "+"lat:" + this.getPosition().lat + " lng:"
+	+ this.getPosition().lng + " isClick:" + this.isClick;
+	
 };
 
 function redrawOneMarker(marker,map){
